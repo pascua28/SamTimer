@@ -1,6 +1,9 @@
 package com.roottimer.app
 
+import android.app.Service
 import android.content.Context
+import android.content.Intent
+import android.os.IBinder
 import android.os.Process
 import java.io.File
 import java.io.IOException
@@ -185,5 +188,19 @@ class RootService(private val context: Context) : IRootService.Stub() {
         val rc = proc.exitValue()
         log(callback, "exploit finished rc=$rc")
         return rc
+    }
+}
+
+class RootAndroidService : Service() {
+
+    private lateinit var rootService: RootService
+
+    override fun onCreate() {
+        super.onCreate()
+        rootService = RootService(this)
+    }
+
+    override fun onBind(intent: Intent?): IBinder {
+        return rootService
     }
 }
