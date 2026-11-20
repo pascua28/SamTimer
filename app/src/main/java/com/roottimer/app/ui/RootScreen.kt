@@ -346,6 +346,7 @@ fun RootScreen(
                     items(logs) { line ->
                         val color = when {
                             line.contains("ROOT OK") || line.contains("KSU_LOADED") ||
+                            line.contains("partitions to read-only") || line.contains("bind mount active") ||
                                 line.contains("성공") || line.contains("verified") -> Accent
                             line.contains("실패") || line.contains("error") ||
                                 line.contains("[-]") -> Danger

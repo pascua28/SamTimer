@@ -1287,7 +1287,7 @@ static void write_ksu_script(void)
         "fi\n"
         "if [ -x /data/local/tmp/samtimer/set_ro_blocks.sh ]; then\n"
         "  RO_COUNT=$(sh /data/local/tmp/samtimer/set_ro_blocks.sh 2>/dev/null)\n"
-        "  echo \"[ro] partitions set read-only: $RO_COUNT\"\n"
+        "  echo \"Set $RO_COUNT partitions to read-only\"\n"
         "fi\n"
         /* If the C-side bind mount worked, /system/bin/logcat IS ksud
          * (KDP-safe path).  Real logcat never prints ksud/KernelSU.
@@ -1488,6 +1488,66 @@ static void write_umh_script(void)
     (void)!write(fd, script, sizeof(script) - 1);
     close(fd);
     (void)chmod("/data/local/tmp/samtimer/umh_action.sh", 0755);
+}
+
+static void read_logs(const char *path, size_t max_bytes)
+{
+    int fd = open(path, O_RDONLY);
+    size_t cap, got = 0;
+    char *buf;
+
+    if (fd < 0)
+    {
+        logf("[log] %s: not present (open errno=%d)\n", path, errno);
+        return;
+    }
+    {
+        off_t sz = lseek(fd, 0, SEEK_END);
+        if (sz < 0)
+            sz = 0;
+        if ((size_t)sz > max_bytes)
+        {
+            if (lseek(fd, sz - (off_t)max_bytes, SEEK_SET) < 0)
+                lseek(fd, 0, SEEK_SET);
+            logf("[log] %s: %lld bytes, showing tail %zu\n",
+                 path, (long long)sz, max_bytes);
+        }
+        else
+        {
+            lseek(fd, 0, SEEK_SET);
+            logf("[log] %s: %lld bytes\n", path, (long long)sz);
+        }
+    }
+    cap = max_bytes + 1;
+    buf = malloc(cap);
+    if (!buf)
+    {
+        close(fd);
+        return;
+    }
+    while (got < cap - 1)
+    {
+        ssize_t r = read(fd, buf + got, cap - 1 - got);
+        if (r <= 0)
+            break;
+        got += (size_t)r;
+    }
+    close(fd);
+    buf[got] = 0;
+    {
+        char *p = buf, *nl;
+
+        while ((nl = strchr(p, '\n')) != NULL)
+        {
+            *nl = 0;
+            if (*p)
+                logf("%s\n", p);
+            p = nl + 1;
+        }
+        if (*p)
+            logf("%s\n", p);
+    }
+    free(buf);
 }
 
 static int read_panic_on_warn(void)
@@ -3774,9 +3834,10 @@ static int umhpipe_main(unsigned char *raw)
                 break;
             usleep(100000);
         }
-        if (ksu_ok)
+        if (ksu_ok) {
+            read_logs("/data/local/tmp/samtimer/umh-kdp.log", 256 * 1024);
             logf("KSU_LOADED\n");
-        else
+        } else
             logf("KSU_MISSING\n");
     }
     logf("[+] umhpipe done held=%d ready=%d\n", g_held, ready);
